@@ -575,8 +575,23 @@
       </div>
     </div>
 
+    <div class="setup-section">
+      <div class="setup-section-title">GitHub 自動デプロイ設定（任意）</div>
+      <div class="agent-config">
+        <div class="config-row" style="gap:8px">
+          <input type="text" id="ghUser" placeholder="GitHubユーザー名（例: chuta0111-art）" style="flex:1">
+          <input type="text" id="ghRepo" placeholder="リポジトリ名（例: AI-debate）" style="flex:1">
+        </div>
+        <input type="text" id="ghFile" placeholder="ファイルパス" value="ai_debate.html">
+        <input type="password" id="ghToken" placeholder="Personal Access Token（ghp_...）">
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px">
+          🔑 Token取得: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → repo権限
+        </div>
+      </div>
+    </div>
+
     <div class="setup-note">
-      🔒 APIキーはこのページのメモリにのみ保持されます。ファイル保存・外部送信は一切行いません。ページを閉じると消去されます。<br>
+      🔒 APIキー・GitHubトークンはこのページのメモリにのみ保持されます。ファイル保存・外部送信は一切行いません。ページを閉じると消去されます。<br>
       📡 Perplexityはインターネット検索機能付きで、最新の市場情報も参照できます。
     </div>
 
@@ -598,6 +613,7 @@
   <div class="sep"></div>
   <span class="round-ind" id="roundInd">ROUND 0</span>
   <button class="btn-cfg" onclick="document.getElementById('setupOverlay').style.display='flex'">設定変更</button>
+  <button class="btn-cfg" id="deployBtn" onclick="deployToGitHub()" style="background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.3);color:#22c55e;display:none">⬆ GitHub更新</button>
 </header>
 
 <!-- MAIN -->
@@ -683,6 +699,7 @@ function syncKey() {
 
 // ===== 設定保存 =====
 let cfg = {};
+let ghCfg = {};
 
 function saveSetup() {
   const ik = document.getElementById('implKey').value.trim();
@@ -694,10 +711,88 @@ function saveSetup() {
     eval:{ provider:document.getElementById('evalProv').value, model:document.getElementById('evalModel').value, key:ek }
   };
 
+  // GitHub設定（任意）
+  const ghUser  = document.getElementById('ghUser').value.trim();
+  const ghRepo  = document.getElementById('ghRepo').value.trim();
+  const ghFile  = document.getElementById('ghFile').value.trim() || 'ai_debate.html';
+  const ghToken = document.getElementById('ghToken').value.trim();
+  if(ghUser && ghRepo && ghToken) {
+    ghCfg = { user: ghUser, repo: ghRepo, file: ghFile, token: ghToken };
+    document.getElementById('deployBtn').style.display = 'inline-block';
+  } else {
+    ghCfg = {};
+    document.getElementById('deployBtn').style.display = 'none';
+  }
+
   const shortName = m => m.length > 20 ? m.substring(0,18)+'…' : m;
   document.getElementById('implBadgeTxt').textContent = 'IMPL · '+shortName(cfg.impl.model);
   document.getElementById('evalBadgeTxt').textContent = 'EVAL · '+shortName(cfg.eval.model);
   document.getElementById('setupOverlay').style.display = 'none';
+}
+
+// ===== GitHub自動デプロイ =====
+async function deployToGitHub() {
+  if(!ghCfg.token) { alert('GitHub設定が未入力です。設定変更から入力してください。'); return; }
+  const btn = document.getElementById('deployBtn');
+  btn.textContent = '⬆ 更新中...';
+  btn.disabled = true;
+
+  try {
+    const apiBase = `https://api.github.com/repos/${ghCfg.user}/${ghCfg.repo}/contents/${ghCfg.file}`;
+    const headers = {
+      'Authorization': 'token ' + ghCfg.token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github.v3+json'
+    };
+
+    // 現在のファイルのSHAを取得（更新に必要）
+    let sha = null;
+    try {
+      const getRes = await fetch(apiBase, { headers });
+      if(getRes.ok) {
+        const getData = await getRes.json();
+        sha = getData.sha;
+      }
+    } catch(e) {}
+
+    // 現在のHTMLを取得してBase64エンコード
+    const res = await fetch(window.location.href);
+    const htmlText = await res.text();
+    const encoded = btoa(unescape(encodeURIComponent(htmlText)));
+
+    // GitHubにPUT
+    const body = {
+      message: `AI Debate Room 自動更新 ${new Date().toLocaleString('ja-JP')}`,
+      content: encoded,
+      ...(sha ? { sha } : {})
+    };
+
+    const putRes = await fetch(apiBase, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body)
+    });
+
+    if(putRes.ok) {
+      btn.textContent = '✅ 更新完了';
+      btn.style.color = '#22c55e';
+      setTimeout(() => {
+        btn.textContent = '⬆ GitHub更新';
+        btn.disabled = false;
+      }, 3000);
+    } else {
+      const err = await putRes.json();
+      throw new Error(err.message || putRes.status);
+    }
+  } catch(e) {
+    btn.textContent = '❌ エラー: '+e.message;
+    btn.style.color = '#ef4444';
+    setTimeout(() => {
+      btn.textContent = '⬆ GitHub更新';
+      btn.style.color = '#22c55e';
+      btn.disabled = false;
+    }, 4000);
+  }
 }
 
 // ===== API呼び出し =====
@@ -708,7 +803,7 @@ async function callAI(ac, sys, msgs) {
   if(provider === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model, max_tokens:1000, system:sys, messages:msgs})
     });
     const d = await r.json();
@@ -773,6 +868,7 @@ async function callAI(ac, sys, msgs) {
 
 // ===== UI ヘルパー =====
 let round = 0, running = false;
+let debateHistory = []; // 議論履歴（継続議論用）
 
 const getTime = () => new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
@@ -857,6 +953,17 @@ function addRound(n) {
   log.appendChild(d);
 }
 
+// ===== 承認判定 =====
+function isApproved(evalText) {
+  const approved = ['承認','合意','同意','問題なし','賛成','適切','妥当','良い','良さそう','了解','その通り','正しい','支持'];
+  const rejected = ['懸念','問題','リスク','修正','再考','不十分','不明','疑問','反対','誤り','危険','要検討','見直し'];
+  const t = evalText;
+  const approveScore = approved.filter(w=>t.includes(w)).length;
+  const rejectScore  = rejected.filter(w=>t.includes(w)).length;
+  // 承認ワードが多く、否定ワードが少ない場合のみ承認
+  return approveScore >= 2 && rejectScore <= 1;
+}
+
 // ===== 議論メイン =====
 async function startDebate() {
   if(running) return;
@@ -893,63 +1000,103 @@ async function startDebate() {
     code ? 'コード/データ:\n'+code : ''
   ].filter(Boolean).join('\n');
 
-  const implSys = `あなたはFXのEA（自動売買）開発の実装エキスパートです。コードの設計・実装・改善提案を担当します。
-具体的・実装可能な提案をする。数値・コードはバッククォートで囲む。日本語で簡潔に（400字以内）。
+  const implSys = `あなたはFXのEA（自動売買）開発の実装エキスパートです。
+【重要】必ず「提案：〜する」という提案文の形式で回答してください。
+評価AIの指摘があれば提案を修正・改善して再提案してください。
+具体的・実装可能な内容にする。数値・コードはバッククォートで囲む。日本語で簡潔に（400字以内）。
 ${base}`;
 
-  const evalSys = `あなたはFXのEA（自動売買）の客観的評価者です。実装AIの提案を外部視点から検証します。
-見落とし・リスク・統計的矛盾を指摘する。合理的な提案には同意した上で改善点を示す。日本語で簡潔に（400字以内）。
+  const evalSys = `あなたはFXのEA（自動売買）の客観的評価者です。実装AIの提案を検証します。
+【重要】提案に問題があれば具体的な修正点を指摘してください。
+提案が十分に改善され問題がなければ「承認：〜」と明示して承認してください。
+見落とし・リスク・統計的矛盾を指摘する。日本語で簡潔に（400字以内）。
 ${base}`;
 
-  // --- IMPL ---
-  setStatus(`実装AI (${cfg.impl.model}) が分析中...`, true);
-  addThinking('impl');
+  // 今回の議題を議論履歴に追加
+  debateHistory.push({role:'user', content: uc});
+
+  const MAX_TURNS = 5; // 最大往復回数（承認されなくても強制終了）
+  let turn = 0;
   let implRes = '';
-  try {
-    implRes = await callAI(cfg.impl, implSys, [{role:'user', content:'議題: '+q}]);
-    rmThinking('impl');
-    addMsg('impl','実装AI','設計・提案',cfg.impl.model, implRes);
-  } catch(e) {
-    rmThinking('impl');
-    addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
-    running = false;
-    document.getElementById('debateBtn').disabled = false;
-    setStatus('エラー発生');
-    return;
+  let evalRes = '';
+  let approved = false;
+
+  // ===== IMPL↔EVAL 自動往復ループ =====
+  while(turn < MAX_TURNS && !approved) {
+    turn++;
+
+    // --- IMPL ---
+    setStatus(`実装AI (${cfg.impl.model}) が提案中... [ターン${turn}]`, true);
+    addThinking('impl');
+    try {
+      const implMsgs = turn === 1
+        ? debateHistory  // 初回：ユーザー議題のみ
+        : [...debateHistory, {role:'user', content:`評価AIの指摘:\n${evalRes}\n\n上記を踏まえて提案を修正・再提案してください。`}];
+      implRes = await callAI(cfg.impl, implSys, implMsgs);
+      rmThinking('impl');
+      addMsg('impl','実装AI',`提案 [ターン${turn}]`,cfg.impl.model, implRes);
+    } catch(e) {
+      rmThinking('impl');
+      addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
+      running = false;
+      document.getElementById('debateBtn').disabled = false;
+      setStatus('エラー発生');
+      return;
+    }
+
+    // --- EVAL ---
+    setStatus(`評価AI (${cfg.eval.model}) が検証中... [ターン${turn}]`, true);
+    addThinking('eval');
+    try {
+      const evalMsgs = [
+        ...debateHistory,
+        {role:'user', content:`実装AIの提案（ターン${turn}）:\n${implRes}\n\nこの提案を評価してください。問題なければ「承認：」で始めてください。`}
+      ];
+      evalRes = await callAI(cfg.eval, evalSys, evalMsgs);
+      rmThinking('eval');
+      approved = isApproved(evalRes);
+      addMsg('eval','評価AI', approved ? `✅ 承認 [ターン${turn}]` : `🔄 指摘 [ターン${turn}]`, cfg.eval.model, evalRes);
+    } catch(e) {
+      rmThinking('eval');
+      addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
+      evalRes = '（評価AIエラー）';
+      break;
+    }
+
+    if(approved) break;
+    if(turn < MAX_TURNS) {
+      setStatus(`ターン${turn}完了・指摘あり → 実装AIが再提案します...`);
+      await new Promise(r=>setTimeout(r,800)); // 少し間を置く
+    }
   }
 
-  // --- EVAL ---
-  setStatus(`評価AI (${cfg.eval.model}) がチェック中...`, true);
-  addThinking('eval');
-  let evalRes = '';
-  try {
-    evalRes = await callAI(cfg.eval, evalSys, [{
-      role:'user',
-      content:`議題: ${q}\n\n実装AIの提案:\n${implRes}\n\nこの提案を客観的に評価・検証してください。`
-    }]);
-    rmThinking('eval');
-    addMsg('eval','評価AI','客観的検証',cfg.eval.model, evalRes);
-  } catch(e) {
-    rmThinking('eval');
-    addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
-  }
+  // 履歴に最終提案と評価を追加
+  debateHistory.push({role:'assistant', content:`【実装AI最終提案】\n${implRes}`});
+  debateHistory.push({role:'user', content:`【評価AI最終評価】\n${evalRes}`});
 
   // --- 結論 ---
   setStatus('結論を生成中...', true);
   addThinking('impl');
   try {
-    const fin = await callAI(cfg.impl, implSys, [
-      {role:'user',    content:'議題: '+q},
-      {role:'assistant', content:implRes},
-      {role:'user',    content:`評価AIのフィードバック:\n${evalRes}\n\n指摘を踏まえ、最終的な結論と推奨アクションを簡潔に示してください。`}
-    ]);
+    const finMsgs = [
+      ...debateHistory,
+      {role:'user', content:`議論が${approved?'承認で':'最大ターン数で'}終了しました。最終的な結論と具体的な推奨アクションをまとめてください。`}
+    ];
+    const fin = await callAI(cfg.impl, implSys, finMsgs);
     rmThinking('impl');
     addConclusion(fin);
+    debateHistory.push({role:'assistant', content:'【結論】\n'+fin});
   } catch(e) {
     rmThinking('impl');
   }
 
-  setStatus(`ROUND ${round} 完了`);
+  // 履歴を直近16件に制限
+  if(debateHistory.length > 16) {
+    debateHistory = debateHistory.slice(debateHistory.length - 16);
+  }
+
+  const endMsg = approved ? `✅ ROUND ${round} 承認完了（${turn}ターン）` : `⚠️ ROUND ${round} 完了（最大ターン数到達）`;
+  setStatus(endMsg + ' ─ 続けて質問できます');
   running = false;
   document.getElementById('debateBtn').disabled = false;
   document.getElementById('qIn').value = '';
@@ -959,6 +1106,7 @@ function clearAll() {
   document.getElementById('log').innerHTML =
     '<div class="empty" id="empty"><div class="empty-ic">⚔</div><div class="empty-tx">議題を入力して議論を開始してください</div></div>';
   round = 0;
+  debateHistory = []; // 履歴もリセット
   document.getElementById('roundInd').textContent = 'ROUND 0';
   setStatus('待機中');
   window.scrollTo({top:0});
