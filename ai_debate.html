@@ -804,7 +804,7 @@ async function callAI(ac, sys, msgs) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model, max_tokens:1000, system:sys, messages:msgs})
+      body:JSON.stringify({model, max_tokens:4096, system:sys, messages:msgs})
     });
     const d = await r.json();
     if(d.error) throw new Error(d.error.message);
@@ -816,7 +816,7 @@ async function callAI(ac, sys, msgs) {
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model, max_tokens:1000, messages:[{role:'system',content:sys},...msgs]})
+      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
     });
     const d = await r.json();
     if(d.error) throw new Error(d.error.message);
@@ -844,7 +844,7 @@ async function callAI(ac, sys, msgs) {
     const r = await fetch('https://api.x.ai/v1/chat/completions', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model, max_tokens:1000, messages:[{role:'system',content:sys},...msgs]})
+      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
     });
     const d = await r.json();
     if(d.error) throw new Error(d.error.message);
@@ -856,7 +856,7 @@ async function callAI(ac, sys, msgs) {
     const r = await fetch('https://api.perplexity.ai/chat/completions', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model, max_tokens:1000, messages:[{role:'system',content:sys},...msgs]})
+      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
     });
     const d = await r.json();
     if(d.error) throw new Error(typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
@@ -1003,17 +1003,27 @@ async function startDebate() {
   const implSys = `あなたはFXのEA（自動売買）開発の実装エキスパートです。
 【重要】必ず「提案：〜する」という提案文の形式で回答してください。
 評価AIの指摘があれば提案を修正・改善して再提案してください。
-具体的・実装可能な内容にする。数値・コードはバッククォートで囲む。日本語で簡潔に（400字以内）。
+具体的・実装可能な内容にする。数値・コードはバッククォートで囲む。コードを含む場合は完全なコードを省略せず記述すること。日本語で回答。
 ${base}`;
 
   const evalSys = `あなたはFXのEA（自動売買）の客観的評価者です。実装AIの提案を検証します。
 【重要】提案に問題があれば具体的な修正点を指摘してください。
 提案が十分に改善され問題がなければ「承認：〜」と明示して承認してください。
-見落とし・リスク・統計的矛盾を指摘する。日本語で簡潔に（400字以内）。
+見落とし・リスク・統計的矛盾を指摘する。コードの不備があれば具体的に指摘すること。日本語で回答。
 ${base}`;
 
-  // 今回の議題を議論履歴に追加
-  debateHistory.push({role:'user', content: uc});
+  // 各エージェント用の会話履歴を個別に管理
+  // user/assistant が正しく交互になるようにする
+  let implMsgs = []; // IMPL用メッセージ配列
+  let evalMsgs = []; // EVAL用メッセージ配列
+
+  // 前ラウンドのコンテキストがあれば要約として最初のuserメッセージに含める
+  if(debateHistory.length > 0) {
+    const prevSummary = debateHistory.map(h => h.content).join('\n---\n');
+    implMsgs.push({role:'user', content: `【前回までの議論】\n${prevSummary}\n\n【今回の議題】\n${uc}`});
+  } else {
+    implMsgs.push({role:'user', content: uc});
+  }
 
   const MAX_TURNS = 5; // 最大往復回数（承認されなくても強制終了）
   let turn = 0;
@@ -1029,12 +1039,11 @@ ${base}`;
     setStatus(`実装AI (${cfg.impl.model}) が提案中... [ターン${turn}]`, true);
     addThinking('impl');
     try {
-      const implMsgs = turn === 1
-        ? debateHistory  // 初回：ユーザー議題のみ
-        : [...debateHistory, {role:'user', content:`評価AIの指摘:\n${evalRes}\n\n上記を踏まえて提案を修正・再提案してください。`}];
       implRes = await callAI(cfg.impl, implSys, implMsgs);
       rmThinking('impl');
       addMsg('impl','実装AI',`提案 [ターン${turn}]`,cfg.impl.model, implRes);
+      // IMPL応答を履歴に追加（role: assistant）
+      implMsgs.push({role:'assistant', content: implRes});
     } catch(e) {
       rmThinking('impl');
       addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
@@ -1048,14 +1057,18 @@ ${base}`;
     setStatus(`評価AI (${cfg.eval.model}) が検証中... [ターン${turn}]`, true);
     addThinking('eval');
     try {
-      const evalMsgs = [
-        ...debateHistory,
-        {role:'user', content:`実装AIの提案（ターン${turn}）:\n${implRes}\n\nこの提案を評価してください。問題なければ「承認：」で始めてください。`}
-      ];
+      // EVAL用メッセージ構築（提案をuserメッセージとして渡す）
+      if(evalMsgs.length === 0) {
+        evalMsgs.push({role:'user', content: `ユーザーの議題:\n${uc}\n\n実装AIの提案（ターン${turn}）:\n${implRes}\n\nこの提案を評価してください。問題なければ「承認：」で始めてください。`});
+      } else {
+        evalMsgs.push({role:'user', content: `実装AIの修正提案（ターン${turn}）:\n${implRes}\n\nこの提案を再評価してください。問題なければ「承認：」で始めてください。`});
+      }
       evalRes = await callAI(cfg.eval, evalSys, evalMsgs);
       rmThinking('eval');
       approved = isApproved(evalRes);
       addMsg('eval','評価AI', approved ? `✅ 承認 [ターン${turn}]` : `🔄 指摘 [ターン${turn}]`, cfg.eval.model, evalRes);
+      // EVAL応答を履歴に追加（role: assistant）
+      evalMsgs.push({role:'assistant', content: evalRes});
     } catch(e) {
       rmThinking('eval');
       addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
@@ -1065,29 +1078,31 @@ ${base}`;
 
     if(approved) break;
     if(turn < MAX_TURNS) {
+      // 次ターン用：評価フィードバックをIMPLに追加（role: user）
+      implMsgs.push({role:'user', content: `評価AIの指摘:\n${evalRes}\n\n上記を踏まえて提案を修正・再提案してください。`});
       setStatus(`ターン${turn}完了・指摘あり → 実装AIが再提案します...`);
       await new Promise(r=>setTimeout(r,800)); // 少し間を置く
     }
   }
 
-  // 履歴に最終提案と評価を追加
-  debateHistory.push({role:'assistant', content:`【実装AI最終提案】\n${implRes}`});
-  debateHistory.push({role:'user', content:`【評価AI最終評価】\n${evalRes}`});
+  // 議論履歴に最終結果を追加（次ラウンドの文脈用、交互を維持）
+  debateHistory.push({role:'user', content: uc});
+  debateHistory.push({role:'assistant', content: `【実装AI最終提案】\n${implRes}`});
 
   // --- 結論 ---
   setStatus('結論を生成中...', true);
   addThinking('impl');
   try {
-    const finMsgs = [
-      ...debateHistory,
-      {role:'user', content:`議論が${approved?'承認で':'最大ターン数で'}終了しました。最終的な結論と具体的な推奨アクションをまとめてください。`}
-    ];
-    const fin = await callAI(cfg.impl, implSys, finMsgs);
+    // implMsgsの続きとして結論を要求（正しくuserメッセージとして追加）
+    implMsgs.push({role:'user', content: `議論が${approved?'承認で':'最大ターン数で'}終了しました。最終的な結論と具体的な推奨アクションをまとめてください。`});
+    const fin = await callAI(cfg.impl, implSys, implMsgs);
     rmThinking('impl');
     addConclusion(fin);
-    debateHistory.push({role:'assistant', content:'【結論】\n'+fin});
+    debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+    debateHistory.push({role:'assistant', content: '【結論】\n'+fin});
   } catch(e) {
     rmThinking('impl');
+    debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
   }
 
   // 履歴を直近16件に制限
