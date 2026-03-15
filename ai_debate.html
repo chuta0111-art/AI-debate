@@ -693,6 +693,8 @@
       <div class="setup-section-title">OpenRouter APIキー</div>
       <div class="agent-config">
         <input type="password" id="orKey" placeholder="OpenRouter APIキー（sk-or-v1-...）">
+        <button onclick="testORKey()" id="orTestBtn" style="margin-top:6px;padding:4px 12px;font-size:11px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">🔍 接続テスト</button>
+        <div id="orTestResult" style="font-size:11px;margin-top:4px;line-height:1.5;display:none"></div>
         <div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.7">
           取得方法: <strong style="color:var(--text)">openrouter.ai</strong> → アカウント作成（無料） → Settings → API Keys → Create Key<br>
           クレジットカード不要。無料モデルは 20req/min・200req/day まで使えます。
@@ -921,6 +923,50 @@ const OR_FREE_MODELS = [
   { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定・実績あり' },
   { id:'nvidia/llama-3.1-nemotron-nano-8b-v1:free', label:'Nemotron Nano 8B — 超軽量' },
 ];
+
+// OpenRouter接続テスト
+async function testORKey() {
+  const key = document.getElementById('orKey').value.trim();
+  const btn = document.getElementById('orTestBtn');
+  const result = document.getElementById('orTestResult');
+  result.style.display = 'block';
+  if(!key) { result.innerHTML = '<span style="color:#ef4444">APIキーを入力してください</span>'; return; }
+  if(!key.startsWith('sk-or-')) { result.innerHTML = '<span style="color:#ef4444">キー形式が不正です（sk-or-v1-... で始まる必要があります）</span>'; return; }
+  btn.disabled = true; btn.textContent = '⏳ テスト中...';
+  result.innerHTML = '<span style="color:var(--text-dim)">テスト中...</span>';
+  try {
+    // Step 1: キー認証チェック
+    const authRes = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      headers: {'Authorization': 'Bearer '+key}
+    });
+    if(!authRes.ok) {
+      const authErr = await authRes.text();
+      result.innerHTML = `<span style="color:#ef4444">❌ 認証失敗 (HTTP ${authRes.status}): ${authErr}<br>APIキーが無効か期限切れです。openrouter.ai で新しいキーを作成してください。</span>`;
+      btn.disabled = false; btn.textContent = '🔍 接続テスト'; return;
+    }
+    const authData = await authRes.json();
+    const label = authData.data?.label || '(名前なし)';
+    const credits = authData.data?.limit_remaining != null ? `$${authData.data.limit_remaining.toFixed(4)}` : '不明';
+
+    // Step 2: 実際のAPI呼び出しテスト（最小リクエスト）
+    const chatRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key,'HTTP-Referer':window.location.href,'X-Title':'AI Debate Room'},
+      body:JSON.stringify({model:'openrouter/free', max_tokens:20, messages:[{role:'user',content:'Say "OK" in one word.'}]})
+    });
+    const chatData = await chatRes.json();
+    if(chatData.error) {
+      const emsg = typeof chatData.error === 'string' ? chatData.error : (chatData.error.message || JSON.stringify(chatData.error));
+      result.innerHTML = `<span style="color:#f59e0b">⚠️ キー有効（${label}）・残高: ${credits}<br>しかしAPI呼び出しエラー: ${emsg}<br>→ レート制限か、アカウントのメール認証が必要かもしれません。openrouter.ai でアカウント設定を確認してください。</span>`;
+    } else {
+      const usedModel = chatData.model || 'unknown';
+      result.innerHTML = `<span style="color:#22c55e">✅ 接続成功！<br>キー名: ${label} ・残高: ${credits}<br>使用モデル: ${usedModel}<br>議論を開始できます。</span>`;
+    }
+  } catch(e) {
+    result.innerHTML = `<span style="color:#ef4444">❌ 接続エラー: ${e.message}<br>ネットワーク接続を確認してください。</span>`;
+  }
+  btn.disabled = false; btn.textContent = '🔍 接続テスト';
+}
 
 // OpenRouterモード用セレクトの初期化
 function initORModels() {
@@ -1172,6 +1218,19 @@ async function callAI(ac, sys, msgs) {
 
   // OpenRouter (OpenAI互換) — フォールバック付き
   if(provider === 'openrouter') {
+    // まずAPIキーの有効性をチェック
+    try {
+      const authCheck = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: {'Authorization': 'Bearer '+key}
+      });
+      if(!authCheck.ok) {
+        throw new Error(`APIキーが無効です (HTTP ${authCheck.status})。openrouter.ai で新しいキーを作成してください。「🔍 接続テスト」ボタンで詳細を確認できます。`);
+      }
+    } catch(e) {
+      if(e.message.includes('APIキーが無効')) throw e;
+      // ネットワークエラーの場合はそのまま続行
+    }
+
     const fallbackModels = OR_FREE_MODELS.map(m => m.id).filter(m => m !== model);
     const tryModels = [model, ...fallbackModels];
     let lastErr = '';
@@ -1187,22 +1246,30 @@ async function callAI(ac, sys, msgs) {
           },
           body:JSON.stringify({model:tryModel, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
         });
+        if(r.status === 401 || r.status === 403) {
+          throw new Error(`APIキー認証エラー (HTTP ${r.status})。openrouter.ai でキーを確認してください。`);
+        }
         const d = await r.json();
         if(d.error) {
           const emsg = typeof d.error === 'string' ? d.error : (d.error.message || JSON.stringify(d.error));
+          // 認証系エラーはフォールバックせず即座に報告
+          if(r.status >= 400 && r.status < 500 && r.status !== 404) {
+            throw new Error(`API エラー (HTTP ${r.status}): ${emsg}`);
+          }
           console.warn(`[OpenRouter] ${tryModel} failed: ${emsg}`);
           lastErr = `${tryModel}: ${emsg}`;
-          continue; // 次のモデルで再試行
+          continue;
         }
         if(tryModel !== model) console.log(`[OpenRouter] フォールバック成功: ${model} → ${tryModel}`);
         return d.choices[0].message.content;
       } catch(e) {
+        if(e.message.includes('APIキー') || e.message.includes('API エラー')) throw e;
         console.warn(`[OpenRouter] ${tryModel} network error: ${e.message}`);
         lastErr = `${tryModel}: ${e.message}`;
         continue;
       }
     }
-    throw new Error(`全モデルで失敗しました。最後のエラー: ${lastErr}\nAPIキーを確認してください。`);
+    throw new Error(`全モデルで失敗しました。最後のエラー: ${lastErr}\n\n「🔍 接続テスト」ボタンで原因を診断してください。`);
   }
 
   throw new Error('未対応プロバイダー: '+provider);
