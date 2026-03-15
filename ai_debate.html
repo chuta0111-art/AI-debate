@@ -503,6 +503,151 @@
   .empty-ic { font-size:26px; opacity:0.22; }
   .empty-tx { font-family:var(--mono); font-size:11px; letter-spacing:0.05em; text-align:center; line-height:2; }
 
+  /* Manual relay modal */
+  #relayModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .relay-card {
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 10px;
+    width: 100%;
+    max-width: 700px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin: auto;
+  }
+
+  .relay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .relay-header .agent-dot { width: 9px; height: 9px; }
+
+  .relay-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .relay-step {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  .relay-prompt-box {
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.7;
+    max-height: 250px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: all;
+  }
+
+  .relay-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-copy {
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.15s;
+  }
+
+  .btn-copy:hover { background: #2563eb; }
+
+  .relay-response {
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 10px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+    width: 100%;
+    min-height: 150px;
+    transition: border-color 0.15s;
+  }
+
+  .relay-response:focus { border-color: var(--accent); }
+
+  .relay-response-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .btn-submit-relay {
+    padding: 10px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.15s;
+    width: 100%;
+  }
+
+  .btn-submit-relay:hover { background: #16a34a; }
+  .btn-submit-relay:disabled { background: var(--border-bright); color: var(--text-dim); cursor: not-allowed; }
+
+  .btn-skip-relay {
+    padding: 8px 14px;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border-bright);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+
+  .btn-skip-relay:hover { color: var(--danger); border-color: var(--danger); }
+
   /* Responsive */
   @media (max-width: 700px) {
     .main { flex-direction: column; }
@@ -524,9 +669,64 @@
   <div class="setup-card">
     <div>
       <div class="setup-title">⚔ AI Debate Room — 初期設定</div>
-      <div class="setup-subtitle">実装AIと評価AIのプロバイダー・モデル・APIキーを設定します。<br>異なるAIを組み合わせることで多角的な議論が可能です。</div>
+      <div class="setup-subtitle">モードを選択してください。手動リレーモードならAPIキー不要で無料で使えます。</div>
     </div>
 
+    <div class="setup-section">
+      <div class="setup-section-title">動作モード</div>
+      <div class="agent-config">
+        <div class="config-row">
+          <select id="modeSelect" onchange="toggleMode()" style="width:100%">
+            <option value="openrouter">OpenRouter 無料モデル（おすすめ・自動・無料）</option>
+            <option value="manual">手動リレーモード（APIキー不要・無料）</option>
+            <option value="api">自動APIモード（各社APIキー必要）</option>
+          </select>
+        </div>
+        <div id="modeDesc" style="font-size:11px;color:var(--text-dim);line-height:1.7;margin-top:4px">
+          OpenRouterの無料モデルで全自動議論。APIキー1つで異なるAIモデルを実装AI・評価AIに割り当て、多角的な議論を実現します。
+        </div>
+      </div>
+    </div>
+
+    <div id="openrouterSettings">
+    <div class="setup-section">
+      <div class="setup-section-title">OpenRouter APIキー</div>
+      <div class="agent-config">
+        <input type="password" id="orKey" placeholder="OpenRouter APIキー（sk-or-v1-...）">
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+          取得方法: <strong style="color:var(--text)">openrouter.ai</strong> → アカウント作成（無料） → Settings → API Keys → Create Key<br>
+          クレジットカード不要。無料モデルは 20req/min・200req/day まで使えます。
+        </div>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title">実装AI（設計・提案担当）</div>
+      <div class="agent-config">
+        <div class="agent-config-header">
+          <div class="agent-dot" style="background:var(--impl-color)"></div>
+          <span class="agent-config-label" style="color:var(--impl-color)">IMPL</span>
+          <span class="agent-config-role">コード設計・改善提案</span>
+        </div>
+        <select id="orImplModel" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title">評価AI（客観的検証担当）</div>
+      <div class="agent-config">
+        <div class="agent-config-header">
+          <div class="agent-dot" style="background:var(--eval-color)"></div>
+          <span class="agent-config-label" style="color:var(--eval-color)">EVAL</span>
+          <span class="agent-config-role">リスク・矛盾・見落としのチェック</span>
+        </div>
+        <select id="orEvalModel" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="setup-note">
+      異なるモデルを実装AIと評価AIに割り当てると、学習データ・推論傾向の違いから多角的な議論が生まれます。
+    </div>
+    </div>
+
+    <div id="apiSettings" style="display:none">
     <div class="setup-section">
       <div class="setup-section-title">実装AI（設計・提案担当）</div>
       <div class="agent-config">
@@ -542,6 +742,7 @@
             <option value="google">Google (Gemini)</option>
             <option value="xai">xAI (Grok)</option>
             <option value="perplexity">Perplexity</option>
+            <option value="openrouter">OpenRouter</option>
           </select>
           <select id="implModel" style="flex:1; min-width:0"></select>
         </div>
@@ -564,6 +765,7 @@
             <option value="google">Google (Gemini)</option>
             <option value="xai">xAI (Grok)</option>
             <option value="perplexity">Perplexity</option>
+            <option value="openrouter">OpenRouter</option>
           </select>
           <select id="evalModel" style="flex:1; min-width:0"></select>
         </div>
@@ -573,6 +775,7 @@
           実装AIと同じAPIキーを使用
         </label>
       </div>
+    </div>
     </div>
 
     <div class="setup-section">
@@ -592,7 +795,7 @@
 
     <div class="setup-note">
       🔒 APIキー・GitHubトークンはこのページのメモリにのみ保持されます。ファイル保存・外部送信は一切行いません。ページを閉じると消去されます。<br>
-      📡 Perplexityはインターネット検索機能付きで、最新の市場情報も参照できます。
+      📡 OpenRouterモード: openrouter.ai で無料アカウント作成 → APIキー1つで無料モデルが使い放題（20req/min）。
     </div>
 
     <button class="btn-start" onclick="saveSetup()">設定を保存して開始 →</button>
@@ -657,6 +860,28 @@
 <!-- Scroll to bottom button -->
 <button id="scrollBtn" onclick="scrollToBottom()">↓ 最新へ</button>
 
+<!-- Manual Relay Modal -->
+<div id="relayModal">
+  <div class="relay-card">
+    <div class="relay-header">
+      <div class="agent-dot" id="relayDot"></div>
+      <span class="relay-title" id="relayTitle">実装AI のプロンプト</span>
+      <span class="relay-step" id="relayStep">ターン 1/5</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6" id="relayInstr">
+      下のプロンプトをコピーして、お好きなAIチャットに貼り付けてください。AIの回答を下の欄に貼り付けて送信してください。
+    </div>
+    <div class="relay-prompt-box" id="relayPrompt"></div>
+    <div class="relay-actions">
+      <button class="btn-copy" onclick="copyRelayPrompt()">コピー</button>
+      <button class="btn-skip-relay" onclick="skipRelay()">この議論を中止</button>
+    </div>
+    <div class="relay-response-label">AIの回答を貼り付け:</div>
+    <textarea class="relay-response" id="relayResponse" placeholder="AIの回答をここに貼り付けてください..."></textarea>
+    <button class="btn-submit-relay" id="relaySubmitBtn" onclick="submitRelay()">回答を送信</button>
+  </div>
+</div>
+
 <script>
 // ===== モデルリスト =====
 const MODELS = {
@@ -670,8 +895,59 @@ const MODELS = {
     'sonar-reasoning-pro',
     'sonar-reasoning',
     'sonar-deep-research'
+  ],
+  openrouter: [
+    'qwen/qwen3-next-80b-a3b-instruct:free',
+    'qwen/qwen3-coder:free',
+    'deepseek/deepseek-chat-v3-0324:free',
+    'deepseek/deepseek-r1:free',
+    'meta-llama/llama-4-maverick:free',
+    'meta-llama/llama-4-scout:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'google/gemma-3-27b-it:free',
+    'google/gemma-3-12b-it:free',
+    'mistralai/mistral-small-3.1-24b-instruct:free',
+    'google/gemini-2.0-flash-exp:free',
+    'moonshotai/kimi-k2:free'
   ]
 };
+
+// OpenRouterモード用のモデルリスト（表示名付き）
+const OR_FREE_MODELS = [
+  { id:'qwen/qwen3-next-80b-a3b-instruct:free', label:'Qwen3-Next 80B — 汎用・高品質' },
+  { id:'qwen/qwen3-coder:free',               label:'Qwen3 Coder 480B — コード特化' },
+  { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — バランス型' },
+  { id:'deepseek/deepseek-r1:free',            label:'DeepSeek R1 — 推論特化' },
+  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 多用途' },
+  { id:'meta-llama/llama-4-scout:free',        label:'Llama 4 Scout — 軽量高速' },
+  { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定' },
+  { id:'google/gemma-3-27b-it:free',           label:'Gemma 3 27B — 慎重な評価向き' },
+  { id:'google/gemma-3-12b-it:free',           label:'Gemma 3 12B — 軽量' },
+  { id:'mistralai/mistral-small-3.1-24b-instruct:free', label:'Mistral Small 3.1 — 高速' },
+  { id:'google/gemini-2.0-flash-exp:free',     label:'Gemini 2.0 Flash — Google製' },
+  { id:'moonshotai/kimi-k2:free',              label:'Kimi K2 — Moonshot AI' },
+];
+
+// OpenRouterモード用セレクトの初期化
+function initORModels() {
+  ['orImplModel','orEvalModel'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if(!sel) return;
+    sel.innerHTML = '';
+    OR_FREE_MODELS.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.label;
+      sel.appendChild(o);
+    });
+  });
+  // デフォルトで異なるモデルを選択（議論の多角性のため）
+  const implSel = document.getElementById('orImplModel');
+  const evalSel = document.getElementById('orEvalModel');
+  if(implSel) implSel.value = 'qwen/qwen3-next-80b-a3b-instruct:free';
+  if(evalSel) evalSel.value = 'google/gemma-3-27b-it:free';
+}
+initORModels();
 
 function updateModels(agent) {
   const prov = document.getElementById(agent+'Prov').value;
@@ -685,6 +961,24 @@ function updateModels(agent) {
 
 updateModels('impl');
 updateModels('eval');
+
+function toggleMode() {
+  const mode = document.getElementById('modeSelect').value;
+  const apiSettings = document.getElementById('apiSettings');
+  const orSettings = document.getElementById('openrouterSettings');
+  const modeDesc = document.getElementById('modeDesc');
+  apiSettings.style.display = 'none';
+  orSettings.style.display = 'none';
+  if(mode === 'openrouter') {
+    orSettings.style.display = 'block';
+    modeDesc.textContent = 'OpenRouterの無料モデルで全自動議論。APIキー1つで異なるAIモデルを実装AI・評価AIに割り当て、多角的な議論を実現します。';
+  } else if(mode === 'manual') {
+    modeDesc.textContent = 'プロンプトが表示されるので、お好きなAIチャット（Claude Code、ChatGPT、Geminiなど）にコピペして回答を貼り付けてください。API費用ゼロで議論できます。';
+  } else {
+    apiSettings.style.display = 'block';
+    modeDesc.textContent = 'APIキーを設定して自動で議論を実行します。各プロバイダーのAPIキーが必要です。';
+  }
+}
 
 function syncKey() {
   const same = document.getElementById('sameKey').checked;
@@ -702,14 +996,28 @@ let cfg = {};
 let ghCfg = {};
 
 function saveSetup() {
-  const ik = document.getElementById('implKey').value.trim();
-  const ek = document.getElementById('sameKey').checked ? ik : document.getElementById('evalKey').value.trim();
-  if(!ik||!ek){ alert('APIキーを入力してください'); return; }
+  const mode = document.getElementById('modeSelect').value;
 
-  cfg = {
-    impl:{ provider:document.getElementById('implProv').value, model:document.getElementById('implModel').value, key:ik },
-    eval:{ provider:document.getElementById('evalProv').value, model:document.getElementById('evalModel').value, key:ek }
-  };
+  if(mode === 'openrouter') {
+    const orKey = document.getElementById('orKey').value.trim();
+    if(!orKey){ alert('OpenRouterのAPIキーを入力してください'); return; }
+    cfg = {
+      mode: 'api',
+      impl:{ provider:'openrouter', model:document.getElementById('orImplModel').value, key:orKey },
+      eval:{ provider:'openrouter', model:document.getElementById('orEvalModel').value, key:orKey }
+    };
+  } else if(mode === 'api') {
+    const ik = document.getElementById('implKey').value.trim();
+    const ek = document.getElementById('sameKey').checked ? ik : document.getElementById('evalKey').value.trim();
+    if(!ik||!ek){ alert('APIキーを入力してください'); return; }
+    cfg = {
+      mode: 'api',
+      impl:{ provider:document.getElementById('implProv').value, model:document.getElementById('implModel').value, key:ik },
+      eval:{ provider:document.getElementById('evalProv').value, model:document.getElementById('evalModel').value, key:ek }
+    };
+  } else {
+    cfg = { mode: 'manual', impl:{ model:'手動' }, eval:{ model:'手動' } };
+  }
 
   // GitHub設定（任意）
   const ghUser  = document.getElementById('ghUser').value.trim();
@@ -725,8 +1033,13 @@ function saveSetup() {
   }
 
   const shortName = m => m.length > 20 ? m.substring(0,18)+'…' : m;
-  document.getElementById('implBadgeTxt').textContent = 'IMPL · '+shortName(cfg.impl.model);
-  document.getElementById('evalBadgeTxt').textContent = 'EVAL · '+shortName(cfg.eval.model);
+  if(cfg.mode === 'manual') {
+    document.getElementById('implBadgeTxt').textContent = 'IMPL · 手動リレー';
+    document.getElementById('evalBadgeTxt').textContent = 'EVAL · 手動リレー';
+  } else {
+    document.getElementById('implBadgeTxt').textContent = 'IMPL · '+shortName(cfg.impl.model);
+    document.getElementById('evalBadgeTxt').textContent = 'EVAL · '+shortName(cfg.eval.model);
+  }
   document.getElementById('setupOverlay').style.display = 'none';
 }
 
@@ -863,6 +1176,23 @@ async function callAI(ac, sys, msgs) {
     return d.choices[0].message.content;
   }
 
+  // OpenRouter (OpenAI互換)
+  if(provider === 'openrouter') {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+key,
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'AI Debate Room'
+      },
+      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
+    });
+    const d = await r.json();
+    if(d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.message || JSON.stringify(d.error)));
+    return d.choices[0].message.content;
+  }
+
   throw new Error('未対応プロバイダー: '+provider);
 }
 
@@ -964,10 +1294,74 @@ function isApproved(evalText) {
   return approveScore >= 2 && rejectScore <= 1;
 }
 
+// ===== 手動リレーモード =====
+let relayResolve = null;
+let relayAborted = false;
+
+function showRelayModal(agentType, stepLabel, promptText) {
+  return new Promise((resolve, reject) => {
+    relayResolve = resolve;
+    relayAborted = false;
+    const modal = document.getElementById('relayModal');
+    const dot = document.getElementById('relayDot');
+    const title = document.getElementById('relayTitle');
+    const step = document.getElementById('relayStep');
+    const prompt = document.getElementById('relayPrompt');
+    const response = document.getElementById('relayResponse');
+
+    if(agentType === 'impl') {
+      dot.style.background = 'var(--impl-color)';
+      title.style.color = 'var(--impl-color)';
+      title.textContent = '実装AI のプロンプト';
+    } else {
+      dot.style.background = 'var(--eval-color)';
+      title.style.color = 'var(--eval-color)';
+      title.textContent = '評価AI のプロンプト';
+    }
+    step.textContent = stepLabel;
+    prompt.textContent = promptText;
+    response.value = '';
+    modal.style.display = 'flex';
+  });
+}
+
+function copyRelayPrompt() {
+  const text = document.getElementById('relayPrompt').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.btn-copy');
+    btn.textContent = 'コピー済み!';
+    setTimeout(() => { btn.textContent = 'コピー'; }, 1500);
+  });
+}
+
+function submitRelay() {
+  const resp = document.getElementById('relayResponse').value.trim();
+  if(!resp) { alert('AIの回答を貼り付けてください'); return; }
+  document.getElementById('relayModal').style.display = 'none';
+  if(relayResolve) relayResolve(resp);
+}
+
+function skipRelay() {
+  relayAborted = true;
+  document.getElementById('relayModal').style.display = 'none';
+  if(relayResolve) relayResolve(null);
+}
+
+// 手動リレー用のプロンプト生成
+function buildRelayPrompt(sysPrompt, messages) {
+  let prompt = '【システム指示】\n' + sysPrompt + '\n\n';
+  messages.forEach(m => {
+    if(m.role === 'user') prompt += '【ユーザー】\n' + m.content + '\n\n';
+    else prompt += '【前回の回答】\n' + m.content + '\n\n';
+  });
+  prompt += '上記を踏まえて回答してください。';
+  return prompt;
+}
+
 // ===== 議論メイン =====
 async function startDebate() {
   if(running) return;
-  if(!cfg.impl) {
+  if(!cfg.mode) {
     alert('まず設定を完了してください');
     document.getElementById('setupOverlay').style.display='flex';
     return;
@@ -1036,52 +1430,83 @@ ${base}`;
     turn++;
 
     // --- IMPL ---
-    setStatus(`実装AI (${cfg.impl.model}) が提案中... [ターン${turn}]`, true);
-    addThinking('impl');
-    try {
-      implRes = await callAI(cfg.impl, implSys, implMsgs);
-      rmThinking('impl');
-      addMsg('impl','実装AI',`提案 [ターン${turn}]`,cfg.impl.model, implRes);
-      // IMPL応答を履歴に追加（role: assistant）
+    if(cfg.mode === 'manual') {
+      setStatus(`実装AIの回答を待っています... [ターン${turn}]`, true);
+      const relayPrompt = buildRelayPrompt(implSys, implMsgs);
+      implRes = await showRelayModal('impl', `ターン ${turn}/${MAX_TURNS} — 実装AI`, relayPrompt);
+      if(implRes === null) { // aborted
+        addMsg('sys','SYSTEM','中止','','議論が中止されました');
+        running = false;
+        document.getElementById('debateBtn').disabled = false;
+        setStatus('中止');
+        return;
+      }
+      addMsg('impl','実装AI',`提案 [ターン${turn}]`,'手動リレー', implRes);
       implMsgs.push({role:'assistant', content: implRes});
-    } catch(e) {
-      rmThinking('impl');
-      addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
-      running = false;
-      document.getElementById('debateBtn').disabled = false;
-      setStatus('エラー発生');
-      return;
+    } else {
+      setStatus(`実装AI (${cfg.impl.model}) が提案中... [ターン${turn}]`, true);
+      addThinking('impl');
+      try {
+        implRes = await callAI(cfg.impl, implSys, implMsgs);
+        rmThinking('impl');
+        addMsg('impl','実装AI',`提案 [ターン${turn}]`,cfg.impl.model, implRes);
+        implMsgs.push({role:'assistant', content: implRes});
+      } catch(e) {
+        rmThinking('impl');
+        addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
+        running = false;
+        document.getElementById('debateBtn').disabled = false;
+        setStatus('エラー発生');
+        return;
+      }
     }
 
     // --- EVAL ---
-    setStatus(`評価AI (${cfg.eval.model}) が検証中... [ターン${turn}]`, true);
-    addThinking('eval');
-    try {
-      // EVAL用メッセージ構築（提案をuserメッセージとして渡す）
-      if(evalMsgs.length === 0) {
-        evalMsgs.push({role:'user', content: `ユーザーの議題:\n${uc}\n\n実装AIの提案（ターン${turn}）:\n${implRes}\n\nこの提案を評価してください。問題なければ「承認：」で始めてください。`});
-      } else {
-        evalMsgs.push({role:'user', content: `実装AIの修正提案（ターン${turn}）:\n${implRes}\n\nこの提案を再評価してください。問題なければ「承認：」で始めてください。`});
+    // EVAL用メッセージ構築
+    if(evalMsgs.length === 0) {
+      evalMsgs.push({role:'user', content: `ユーザーの議題:\n${uc}\n\n実装AIの提案（ターン${turn}）:\n${implRes}\n\nこの提案を評価してください。問題なければ「承認：」で始めてください。`});
+    } else {
+      evalMsgs.push({role:'user', content: `実装AIの修正提案（ターン${turn}）:\n${implRes}\n\nこの提案を再評価してください。問題なければ「承認：」で始めてください。`});
+    }
+
+    if(cfg.mode === 'manual') {
+      setStatus(`評価AIの回答を待っています... [ターン${turn}]`, true);
+      const relayPrompt = buildRelayPrompt(evalSys, evalMsgs);
+      evalRes = await showRelayModal('eval', `ターン ${turn}/${MAX_TURNS} — 評価AI`, relayPrompt);
+      if(evalRes === null) {
+        addMsg('sys','SYSTEM','中止','','議論が中止されました');
+        running = false;
+        document.getElementById('debateBtn').disabled = false;
+        setStatus('中止');
+        return;
       }
-      evalRes = await callAI(cfg.eval, evalSys, evalMsgs);
-      rmThinking('eval');
       approved = isApproved(evalRes);
-      addMsg('eval','評価AI', approved ? `✅ 承認 [ターン${turn}]` : `🔄 指摘 [ターン${turn}]`, cfg.eval.model, evalRes);
-      // EVAL応答を履歴に追加（role: assistant）
+      addMsg('eval','評価AI', approved ? `✅ 承認 [ターン${turn}]` : `🔄 指摘 [ターン${turn}]`, '手動リレー', evalRes);
       evalMsgs.push({role:'assistant', content: evalRes});
-    } catch(e) {
-      rmThinking('eval');
-      addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
-      evalRes = '（評価AIエラー）';
-      break;
+    } else {
+      setStatus(`評価AI (${cfg.eval.model}) が検証中... [ターン${turn}]`, true);
+      addThinking('eval');
+      try {
+        evalRes = await callAI(cfg.eval, evalSys, evalMsgs);
+        rmThinking('eval');
+        approved = isApproved(evalRes);
+        addMsg('eval','評価AI', approved ? `✅ 承認 [ターン${turn}]` : `🔄 指摘 [ターン${turn}]`, cfg.eval.model, evalRes);
+        evalMsgs.push({role:'assistant', content: evalRes});
+      } catch(e) {
+        rmThinking('eval');
+        addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
+        evalRes = '（評価AIエラー）';
+        break;
+      }
     }
 
     if(approved) break;
     if(turn < MAX_TURNS) {
-      // 次ターン用：評価フィードバックをIMPLに追加（role: user）
       implMsgs.push({role:'user', content: `評価AIの指摘:\n${evalRes}\n\n上記を踏まえて提案を修正・再提案してください。`});
-      setStatus(`ターン${turn}完了・指摘あり → 実装AIが再提案します...`);
-      await new Promise(r=>setTimeout(r,800)); // 少し間を置く
+      if(cfg.mode !== 'manual') {
+        setStatus(`ターン${turn}完了・指摘あり → 実装AIが再提案します...`);
+        await new Promise(r=>setTimeout(r,800));
+      }
     }
   }
 
@@ -1090,19 +1515,32 @@ ${base}`;
   debateHistory.push({role:'assistant', content: `【実装AI最終提案】\n${implRes}`});
 
   // --- 結論 ---
-  setStatus('結論を生成中...', true);
-  addThinking('impl');
-  try {
-    // implMsgsの続きとして結論を要求（正しくuserメッセージとして追加）
-    implMsgs.push({role:'user', content: `議論が${approved?'承認で':'最大ターン数で'}終了しました。最終的な結論と具体的な推奨アクションをまとめてください。`});
-    const fin = await callAI(cfg.impl, implSys, implMsgs);
-    rmThinking('impl');
-    addConclusion(fin);
-    debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
-    debateHistory.push({role:'assistant', content: '【結論】\n'+fin});
-  } catch(e) {
-    rmThinking('impl');
-    debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+  implMsgs.push({role:'user', content: `議論が${approved?'承認で':'最大ターン数で'}終了しました。最終的な結論と具体的な推奨アクションをまとめてください。`});
+
+  if(cfg.mode === 'manual') {
+    setStatus('結論の回答を待っています...', true);
+    const relayPrompt = buildRelayPrompt(implSys, implMsgs);
+    const fin = await showRelayModal('impl', '結論生成', relayPrompt);
+    if(fin) {
+      addConclusion(fin);
+      debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+      debateHistory.push({role:'assistant', content: '【結論】\n'+fin});
+    } else {
+      debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+    }
+  } else {
+    setStatus('結論を生成中...', true);
+    addThinking('impl');
+    try {
+      const fin = await callAI(cfg.impl, implSys, implMsgs);
+      rmThinking('impl');
+      addConclusion(fin);
+      debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+      debateHistory.push({role:'assistant', content: '【結論】\n'+fin});
+    } catch(e) {
+      rmThinking('impl');
+      debateHistory.push({role:'user', content: `【評価AI最終評価】\n${evalRes}`});
+    }
   }
 
   // 履歴を直近16件に制限
