@@ -677,14 +677,53 @@
       <div class="agent-config">
         <div class="config-row">
           <select id="modeSelect" onchange="toggleMode()" style="width:100%">
+            <option value="openrouter">OpenRouter 無料モデル（おすすめ・自動・無料）</option>
             <option value="manual">手動リレーモード（APIキー不要・無料）</option>
-            <option value="api">自動APIモード（APIキー必要）</option>
+            <option value="api">自動APIモード（各社APIキー必要）</option>
           </select>
         </div>
         <div id="modeDesc" style="font-size:11px;color:var(--text-dim);line-height:1.7;margin-top:4px">
-          プロンプトが表示されるので、お好きなAIチャット（Claude Code、ChatGPT、Geminiなど）にコピペして回答を貼り付けてください。API費用ゼロで議論できます。
+          OpenRouterの無料モデルで全自動議論。APIキー1つで異なるAIモデルを実装AI・評価AIに割り当て、多角的な議論を実現します。
         </div>
       </div>
+    </div>
+
+    <div id="openrouterSettings">
+    <div class="setup-section">
+      <div class="setup-section-title">OpenRouter APIキー</div>
+      <div class="agent-config">
+        <input type="password" id="orKey" placeholder="OpenRouter APIキー（sk-or-v1-...）">
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+          取得方法: <strong style="color:var(--text)">openrouter.ai</strong> → アカウント作成（無料） → Settings → API Keys → Create Key<br>
+          クレジットカード不要。無料モデルは 20req/min・200req/day まで使えます。
+        </div>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title">実装AI（設計・提案担当）</div>
+      <div class="agent-config">
+        <div class="agent-config-header">
+          <div class="agent-dot" style="background:var(--impl-color)"></div>
+          <span class="agent-config-label" style="color:var(--impl-color)">IMPL</span>
+          <span class="agent-config-role">コード設計・改善提案</span>
+        </div>
+        <select id="orImplModel" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="setup-section">
+      <div class="setup-section-title">評価AI（客観的検証担当）</div>
+      <div class="agent-config">
+        <div class="agent-config-header">
+          <div class="agent-dot" style="background:var(--eval-color)"></div>
+          <span class="agent-config-label" style="color:var(--eval-color)">EVAL</span>
+          <span class="agent-config-role">リスク・矛盾・見落としのチェック</span>
+        </div>
+        <select id="orEvalModel" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="setup-note">
+      異なるモデルを実装AIと評価AIに割り当てると、学習データ・推論傾向の違いから多角的な議論が生まれます。
+    </div>
     </div>
 
     <div id="apiSettings" style="display:none">
@@ -703,6 +742,7 @@
             <option value="google">Google (Gemini)</option>
             <option value="xai">xAI (Grok)</option>
             <option value="perplexity">Perplexity</option>
+            <option value="openrouter">OpenRouter</option>
           </select>
           <select id="implModel" style="flex:1; min-width:0"></select>
         </div>
@@ -725,6 +765,7 @@
             <option value="google">Google (Gemini)</option>
             <option value="xai">xAI (Grok)</option>
             <option value="perplexity">Perplexity</option>
+            <option value="openrouter">OpenRouter</option>
           </select>
           <select id="evalModel" style="flex:1; min-width:0"></select>
         </div>
@@ -754,7 +795,7 @@
 
     <div class="setup-note">
       🔒 APIキー・GitHubトークンはこのページのメモリにのみ保持されます。ファイル保存・外部送信は一切行いません。ページを閉じると消去されます。<br>
-      📡 手動リレーモードでは任意のAIチャットを使えます。Claude Code、ChatGPT無料版、Geminiなど何でもOK。
+      📡 OpenRouterモード: openrouter.ai で無料アカウント作成 → APIキー1つで無料モデルが使い放題（20req/min）。
     </div>
 
     <button class="btn-start" onclick="saveSetup()">設定を保存して開始 →</button>
@@ -854,8 +895,59 @@ const MODELS = {
     'sonar-reasoning-pro',
     'sonar-reasoning',
     'sonar-deep-research'
+  ],
+  openrouter: [
+    'qwen/qwen3-235b-a22b:free',
+    'qwen/qwen3-coder:free',
+    'deepseek/deepseek-chat-v3-0324:free',
+    'deepseek/deepseek-r1:free',
+    'meta-llama/llama-4-maverick:free',
+    'meta-llama/llama-4-scout:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'google/gemma-3-27b-it:free',
+    'google/gemma-3-12b-it:free',
+    'mistralai/mistral-small-3.1-24b-instruct:free',
+    'google/gemini-2.0-flash-exp:free',
+    'moonshotai/kimi-k2:free'
   ]
 };
+
+// OpenRouterモード用のモデルリスト（表示名付き）
+const OR_FREE_MODELS = [
+  { id:'qwen/qwen3-235b-a22b:free',           label:'Qwen3 235B MoE — 汎用・高品質' },
+  { id:'qwen/qwen3-coder:free',               label:'Qwen3 Coder 480B — コード特化' },
+  { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — バランス型' },
+  { id:'deepseek/deepseek-r1:free',            label:'DeepSeek R1 — 推論特化' },
+  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 多用途' },
+  { id:'meta-llama/llama-4-scout:free',        label:'Llama 4 Scout — 軽量高速' },
+  { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定' },
+  { id:'google/gemma-3-27b-it:free',           label:'Gemma 3 27B — 慎重な評価向き' },
+  { id:'google/gemma-3-12b-it:free',           label:'Gemma 3 12B — 軽量' },
+  { id:'mistralai/mistral-small-3.1-24b-instruct:free', label:'Mistral Small 3.1 — 高速' },
+  { id:'google/gemini-2.0-flash-exp:free',     label:'Gemini 2.0 Flash — Google製' },
+  { id:'moonshotai/kimi-k2:free',              label:'Kimi K2 — Moonshot AI' },
+];
+
+// OpenRouterモード用セレクトの初期化
+function initORModels() {
+  ['orImplModel','orEvalModel'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if(!sel) return;
+    sel.innerHTML = '';
+    OR_FREE_MODELS.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.label;
+      sel.appendChild(o);
+    });
+  });
+  // デフォルトで異なるモデルを選択（議論の多角性のため）
+  const implSel = document.getElementById('orImplModel');
+  const evalSel = document.getElementById('orEvalModel');
+  if(implSel) implSel.value = 'qwen/qwen3-235b-a22b:free';
+  if(evalSel) evalSel.value = 'google/gemma-3-27b-it:free';
+}
+initORModels();
 
 function updateModels(agent) {
   const prov = document.getElementById(agent+'Prov').value;
@@ -873,9 +965,14 @@ updateModels('eval');
 function toggleMode() {
   const mode = document.getElementById('modeSelect').value;
   const apiSettings = document.getElementById('apiSettings');
+  const orSettings = document.getElementById('openrouterSettings');
   const modeDesc = document.getElementById('modeDesc');
-  if(mode === 'manual') {
-    apiSettings.style.display = 'none';
+  apiSettings.style.display = 'none';
+  orSettings.style.display = 'none';
+  if(mode === 'openrouter') {
+    orSettings.style.display = 'block';
+    modeDesc.textContent = 'OpenRouterの無料モデルで全自動議論。APIキー1つで異なるAIモデルを実装AI・評価AIに割り当て、多角的な議論を実現します。';
+  } else if(mode === 'manual') {
     modeDesc.textContent = 'プロンプトが表示されるので、お好きなAIチャット（Claude Code、ChatGPT、Geminiなど）にコピペして回答を貼り付けてください。API費用ゼロで議論できます。';
   } else {
     apiSettings.style.display = 'block';
@@ -901,7 +998,15 @@ let ghCfg = {};
 function saveSetup() {
   const mode = document.getElementById('modeSelect').value;
 
-  if(mode === 'api') {
+  if(mode === 'openrouter') {
+    const orKey = document.getElementById('orKey').value.trim();
+    if(!orKey){ alert('OpenRouterのAPIキーを入力してください'); return; }
+    cfg = {
+      mode: 'api',
+      impl:{ provider:'openrouter', model:document.getElementById('orImplModel').value, key:orKey },
+      eval:{ provider:'openrouter', model:document.getElementById('orEvalModel').value, key:orKey }
+    };
+  } else if(mode === 'api') {
     const ik = document.getElementById('implKey').value.trim();
     const ek = document.getElementById('sameKey').checked ? ik : document.getElementById('evalKey').value.trim();
     if(!ik||!ek){ alert('APIキーを入力してください'); return; }
@@ -1068,6 +1173,23 @@ async function callAI(ac, sys, msgs) {
     });
     const d = await r.json();
     if(d.error) throw new Error(typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
+    return d.choices[0].message.content;
+  }
+
+  // OpenRouter (OpenAI互換)
+  if(provider === 'openrouter') {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+key,
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'AI Debate Room'
+      },
+      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
+    });
+    const d = await r.json();
+    if(d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.message || JSON.stringify(d.error)));
     return d.choices[0].message.content;
   }
 
