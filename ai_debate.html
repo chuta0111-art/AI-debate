@@ -897,35 +897,31 @@ const MODELS = {
     'sonar-deep-research'
   ],
   openrouter: [
-    'qwen/qwen3-next-80b-a3b-instruct:free',
-    'qwen/qwen3-coder:free',
-    'deepseek/deepseek-chat-v3-0324:free',
-    'deepseek/deepseek-r1:free',
     'meta-llama/llama-4-maverick:free',
     'meta-llama/llama-4-scout:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'google/gemma-3-27b-it:free',
-    'google/gemma-3-12b-it:free',
+    'google/gemini-2.5-pro-exp-03-25:free',
+    'deepseek/deepseek-chat-v3-0324:free',
+    'deepseek/deepseek-r1-zero:free',
     'mistralai/mistral-small-3.1-24b-instruct:free',
-    'google/gemini-2.0-flash-exp:free',
-    'moonshotai/kimi-k2:free'
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'nvidia/llama-3.1-nemotron-nano-8b-v1:free',
+    'moonshotai/kimi-vl-a3b-thinking:free',
+    'nousresearch/deephermes-3-llama-3-8b-preview:free'
   ]
 };
 
 // OpenRouterモード用のモデルリスト（表示名付き）
 const OR_FREE_MODELS = [
-  { id:'qwen/qwen3-next-80b-a3b-instruct:free', label:'Qwen3-Next 80B — 汎用・高品質' },
-  { id:'qwen/qwen3-coder:free',               label:'Qwen3 Coder 480B — コード特化' },
-  { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — バランス型' },
-  { id:'deepseek/deepseek-r1:free',            label:'DeepSeek R1 — 推論特化' },
-  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 多用途' },
+  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 高品質・多用途（おすすめ）' },
   { id:'meta-llama/llama-4-scout:free',        label:'Llama 4 Scout — 軽量高速' },
-  { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定' },
-  { id:'google/gemma-3-27b-it:free',           label:'Gemma 3 27B — 慎重な評価向き' },
-  { id:'google/gemma-3-12b-it:free',           label:'Gemma 3 12B — 軽量' },
+  { id:'google/gemini-2.5-pro-exp-03-25:free', label:'Gemini 2.5 Pro — 日本語◎・Google最新' },
+  { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — 日本語◎・バランス型' },
+  { id:'deepseek/deepseek-r1-zero:free',       label:'DeepSeek R1 Zero — 推論特化' },
   { id:'mistralai/mistral-small-3.1-24b-instruct:free', label:'Mistral Small 3.1 — 高速' },
-  { id:'google/gemini-2.0-flash-exp:free',     label:'Gemini 2.0 Flash — Google製' },
-  { id:'moonshotai/kimi-k2:free',              label:'Kimi K2 — Moonshot AI' },
+  { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定・実績あり' },
+  { id:'nvidia/llama-3.1-nemotron-nano-8b-v1:free', label:'Nemotron Nano 8B — 超軽量' },
+  { id:'moonshotai/kimi-vl-a3b-thinking:free', label:'Kimi VL Thinking — 思考型' },
+  { id:'nousresearch/deephermes-3-llama-3-8b-preview:free', label:'DeepHermes 3 — 軽量' },
 ];
 
 // OpenRouterモード用セレクトの初期化
@@ -944,8 +940,8 @@ function initORModels() {
   // デフォルトで異なるモデルを選択（議論の多角性のため）
   const implSel = document.getElementById('orImplModel');
   const evalSel = document.getElementById('orEvalModel');
-  if(implSel) implSel.value = 'qwen/qwen3-next-80b-a3b-instruct:free';
-  if(evalSel) evalSel.value = 'google/gemma-3-27b-it:free';
+  if(implSel) implSel.value = 'meta-llama/llama-4-maverick:free';
+  if(evalSel) evalSel.value = 'google/gemini-2.5-pro-exp-03-25:free';
 }
 initORModels();
 
@@ -1176,21 +1172,39 @@ async function callAI(ac, sys, msgs) {
     return d.choices[0].message.content;
   }
 
-  // OpenRouter (OpenAI互換)
+  // OpenRouter (OpenAI互換) — フォールバック付き
   if(provider === 'openrouter') {
-    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+key,
-        'HTTP-Referer': window.location.href,
-        'X-Title': 'AI Debate Room'
-      },
-      body:JSON.stringify({model, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
-    });
-    const d = await r.json();
-    if(d.error) throw new Error(typeof d.error === 'string' ? d.error : (d.error.message || JSON.stringify(d.error)));
-    return d.choices[0].message.content;
+    const fallbackModels = OR_FREE_MODELS.map(m => m.id).filter(m => m !== model);
+    const tryModels = [model, ...fallbackModels];
+    let lastErr = '';
+    for(const tryModel of tryModels) {
+      try {
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'Authorization':'Bearer '+key,
+            'HTTP-Referer': window.location.href,
+            'X-Title': 'AI Debate Room'
+          },
+          body:JSON.stringify({model:tryModel, max_tokens:4096, messages:[{role:'system',content:sys},...msgs]})
+        });
+        const d = await r.json();
+        if(d.error) {
+          const emsg = typeof d.error === 'string' ? d.error : (d.error.message || JSON.stringify(d.error));
+          console.warn(`[OpenRouter] ${tryModel} failed: ${emsg}`);
+          lastErr = `${tryModel}: ${emsg}`;
+          continue; // 次のモデルで再試行
+        }
+        if(tryModel !== model) console.log(`[OpenRouter] フォールバック成功: ${model} → ${tryModel}`);
+        return d.choices[0].message.content;
+      } catch(e) {
+        console.warn(`[OpenRouter] ${tryModel} network error: ${e.message}`);
+        lastErr = `${tryModel}: ${e.message}`;
+        continue;
+      }
+    }
+    throw new Error(`全モデルで失敗しました。最後のエラー: ${lastErr}\nAPIキーを確認してください。`);
   }
 
   throw new Error('未対応プロバイダー: '+provider);
@@ -1453,7 +1467,8 @@ ${base}`;
         implMsgs.push({role:'assistant', content: implRes});
       } catch(e) {
         rmThinking('impl');
-        addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+e.message);
+        const detail = e.message.length > 200 ? e.message.slice(0,200)+'…' : e.message;
+        addMsg('sys','SYSTEM','エラー','','実装AI エラー: '+detail+'\n\n💡 ヒント: APIキーが正しいか確認してください。OpenRouterモードでは openrouter.ai で無料キーを作成できます。');
         running = false;
         document.getElementById('debateBtn').disabled = false;
         setStatus('エラー発生');
@@ -1494,7 +1509,8 @@ ${base}`;
         evalMsgs.push({role:'assistant', content: evalRes});
       } catch(e) {
         rmThinking('eval');
-        addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+e.message);
+        const detail2 = e.message.length > 200 ? e.message.slice(0,200)+'…' : e.message;
+        addMsg('sys','SYSTEM','エラー','','評価AI エラー: '+detail2+'\n\n💡 ヒント: APIキーが正しいか確認してください。');
         evalRes = '（評価AIエラー）';
         break;
       }
