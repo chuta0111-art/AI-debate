@@ -897,6 +897,7 @@ const MODELS = {
     'sonar-deep-research'
   ],
   openrouter: [
+    'openrouter/free',
     'meta-llama/llama-4-maverick:free',
     'meta-llama/llama-4-scout:free',
     'google/gemini-2.5-pro-exp-03-25:free',
@@ -904,15 +905,14 @@ const MODELS = {
     'deepseek/deepseek-r1-zero:free',
     'mistralai/mistral-small-3.1-24b-instruct:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'nvidia/llama-3.1-nemotron-nano-8b-v1:free',
-    'moonshotai/kimi-vl-a3b-thinking:free',
-    'nousresearch/deephermes-3-llama-3-8b-preview:free'
+    'nvidia/llama-3.1-nemotron-nano-8b-v1:free'
   ]
 };
 
 // OpenRouterモード用のモデルリスト（表示名付き）
 const OR_FREE_MODELS = [
-  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 高品質・多用途（おすすめ）' },
+  { id:'openrouter/free',                      label:'🔄 自動選択 — 利用可能な無料モデルから最適選択（最も安定）' },
+  { id:'meta-llama/llama-4-maverick:free',     label:'Llama 4 Maverick — 高品質・多用途' },
   { id:'meta-llama/llama-4-scout:free',        label:'Llama 4 Scout — 軽量高速' },
   { id:'google/gemini-2.5-pro-exp-03-25:free', label:'Gemini 2.5 Pro — 日本語◎・Google最新' },
   { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — 日本語◎・バランス型' },
@@ -920,8 +920,6 @@ const OR_FREE_MODELS = [
   { id:'mistralai/mistral-small-3.1-24b-instruct:free', label:'Mistral Small 3.1 — 高速' },
   { id:'meta-llama/llama-3.3-70b-instruct:free',label:'Llama 3.3 70B — 安定・実績あり' },
   { id:'nvidia/llama-3.1-nemotron-nano-8b-v1:free', label:'Nemotron Nano 8B — 超軽量' },
-  { id:'moonshotai/kimi-vl-a3b-thinking:free', label:'Kimi VL Thinking — 思考型' },
-  { id:'nousresearch/deephermes-3-llama-3-8b-preview:free', label:'DeepHermes 3 — 軽量' },
 ];
 
 // OpenRouterモード用セレクトの初期化
@@ -940,8 +938,8 @@ function initORModels() {
   // デフォルトで異なるモデルを選択（議論の多角性のため）
   const implSel = document.getElementById('orImplModel');
   const evalSel = document.getElementById('orEvalModel');
-  if(implSel) implSel.value = 'meta-llama/llama-4-maverick:free';
-  if(evalSel) evalSel.value = 'google/gemini-2.5-pro-exp-03-25:free';
+  if(implSel) implSel.value = 'openrouter/free';
+  if(evalSel) evalSel.value = 'openrouter/free';
 }
 initORModels();
 
