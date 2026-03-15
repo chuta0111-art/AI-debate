@@ -897,7 +897,7 @@ const MODELS = {
     'sonar-deep-research'
   ],
   openrouter: [
-    'qwen/qwen3-235b-a22b:free',
+    'qwen/qwen3-next-80b-a3b-instruct:free',
     'qwen/qwen3-coder:free',
     'deepseek/deepseek-chat-v3-0324:free',
     'deepseek/deepseek-r1:free',
@@ -914,7 +914,7 @@ const MODELS = {
 
 // OpenRouterモード用のモデルリスト（表示名付き）
 const OR_FREE_MODELS = [
-  { id:'qwen/qwen3-235b-a22b:free',           label:'Qwen3 235B MoE — 汎用・高品質' },
+  { id:'qwen/qwen3-next-80b-a3b-instruct:free', label:'Qwen3-Next 80B — 汎用・高品質' },
   { id:'qwen/qwen3-coder:free',               label:'Qwen3 Coder 480B — コード特化' },
   { id:'deepseek/deepseek-chat-v3-0324:free',  label:'DeepSeek V3 — バランス型' },
   { id:'deepseek/deepseek-r1:free',            label:'DeepSeek R1 — 推論特化' },
@@ -944,7 +944,7 @@ function initORModels() {
   // デフォルトで異なるモデルを選択（議論の多角性のため）
   const implSel = document.getElementById('orImplModel');
   const evalSel = document.getElementById('orEvalModel');
-  if(implSel) implSel.value = 'qwen/qwen3-235b-a22b:free';
+  if(implSel) implSel.value = 'qwen/qwen3-next-80b-a3b-instruct:free';
   if(evalSel) evalSel.value = 'google/gemma-3-27b-it:free';
 }
 initORModels();
